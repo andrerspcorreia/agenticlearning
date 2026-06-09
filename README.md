@@ -178,13 +178,13 @@ You can initialize your LLM model like in **1.3**:
 model = init_chat_model("gpt-4.1-mini", temperature = 0.1)
 ```
 
-Then, use this model to create the agent, instead of passing the LLM's name to the agent and losing access to the LLM.
+Then, use this model to **create the agent**, instead of passing the LLM's name to the agent and losing access to the LLM.
 
 ```
 agent = create_agent(model = model)
 ```
 
-You can define a class to force the agent to structure its response in a specific format.
+You can define a class to force the agent to **structure its response** in a specific **format**.
 
 ```
 @dataclass
@@ -204,7 +204,7 @@ agent = create_agent(
 )
 ```
 
-You can define a dataclass that holds information about the context, for example a userID.
+You can define a dataclass that holds information about the **context**, for example a userID.
 
 ```
 @dataclass
@@ -221,7 +221,7 @@ agent = create_agent(
 )
 ```
 
-This class can be used to pass context to tool functions like so.
+This class can be used to **pass context** to tool functions like so.
 
 ```
 @tool("example_tool", description = "What the model should do with this tool")
@@ -229,7 +229,7 @@ def example_tool(runtime : ToolRuntime[Context]):
     # Do something with the context object like runtime.user_id
 ```
 
-A checkpointer allows you to easily handle separate conversations with the agent using their own thread IDs.
+A **checkpointer** allows you to easily handle **separate conversations** with the agent using their own **thread IDs**.
 
 ```
 checkpointer = InMemorySaver()
@@ -252,16 +252,16 @@ agent = create_agent(
 )
 ```
 
-This agent has access to:
+This agent has **access to**:
 
-- The LLM object.
-- Two tools, defined by their descriptions.
-- A system prompt: condition the agent on its role.
-- Context class: provides the ability to pass contexts to the agent.
-- A response format: to force the agent to answer in a specific format
-- Checkpointer: memory so that the agent can keep track of multiple conversations based on a thread ID.
+- The **LLM** object.
+- **Two tools**, defined by their descriptions.
+- A **system prompt**: condition the agent on its role.
+- **Context class**: provides the ability to pass contexts to the agent.
+- A **response format**: to force the agent to answer in a specific format
+- **Checkpointer**: memory so that the agent can keep track of multiple conversations based on a thread ID.
 
-Before calling the model create a configuration dictionary with the threadID (similarly for context).
+Before calling the model create a configuration **dictionary** with the **threadID** (similarly for context).
 
 ```
 config = {
@@ -296,7 +296,7 @@ print(response["structured_response"].temperature_celsius)
 
 ### 1.6 Multi-modal input: Text AND images
 
-How to pass an image from an URL
+How to pass an **image from an URL**.
 
 ```
 from base64 import b64encode
@@ -317,7 +317,7 @@ response = model.invoke(messages)
 print(response.content)
 ```
 
-How to pass an image from disk. We need to load the image bytes, encode the image bytes as b64, and then decode them into a string to pass to the model.
+How to pass an **image from disk**. We need to load the image bytes, encode the image bytes as b64, and then decode them into a string to pass to the model.
 
 ```
 from base64 import b64encode
@@ -337,4 +337,207 @@ messages = [{
 }]
 response = model.invoke(messages)
 print(response.content)
+```
+
+### 1.7 RAG - Retrieval Augmented Generation
+
+The agent uses some form of **knowledge base** to answer the questions/prompts.
+
+For example we can have a list of knowledge:
+
+```
+texts = [
+    "I love apples.",
+    "I enjoy oranges.",
+    "I think pears taste very good."
+    "I hate bananas.",
+    "I dislike raspberries.",
+    "I despise mangos.",
+    "I love Linux.",
+    "I hate Windows."
+]
+```
+
+Convert the knowledge into an **vector representation**.
+
+```
+embeddings = OpenAIEmbeddings(model = "text-embedding-3-large")
+vector_store = FAISS.from_texts(texts, embeddings = embeddings)
+```
+
+You can do **similarity search** using the vector store.
+
+```
+vector_store.similarity_search("What fruits does the person like?", k = 3)
+vector_store.similarity_search("What fruits does the person hate?", k = 3)
+```
+
+You can **convert** this similarity search on the vector store (vector representation of your knowledge) into a **tool** that an agent can use.
+
+```
+retriever = vector_store.as_retriever(
+    search_kwargs = {
+        "k" : 3 # TOP 3 answers
+    }
+)
+retriever_tool = create_retriever_tool(retriever, name = "kb_search", description = "Search the fruit knowledge base for information.")
+
+agent = create_agent(
+    model = "gpt-4.1-mini",
+    tools = [retriever_tool],
+    system_prompt =
+        "You are a helpful assistant. For questions about Macs, apples, or laptops. First call the kb_search tool to retrieve context, then answer succinctly. Maybe you have to use it multiple times before answering."
+)
+```
+
+The agent can use the tools **multiple times** per prompt for example we can ask it two questions that require it to use the tool twice.
+
+```
+response = agent.invoke({
+    "messages" : [
+        {
+            "role": "user",
+            "content": "What three fruits does the person like and what three fruits does the person dislike?"
+        }
+    ]
+})
+response["messages"][-1]["content"]
+```
+
+### 1.8 (1.9 & 1.10) Middleware
+
+Sits **between** the prompt and the response. Allows you to enhance the capabilities of the agent. For example you can choose between different system prompts or models based on the context. You can summarize, rate limit etc.
+
+We will need a context class once again. In this example the behavior of the agent will change based on the user's role instead of ID.
+
+```
+@dataclass
+class Context:
+    user_role : str
+```
+
+Similar to tools, we create a function that the agent calls. Lets start with **changing the system prompt**.
+
+```
+@dynamic_prompt
+def user_role_prompt(request : ModelRequest) -> str:
+    user_role = request.runtime.context.user_role
+
+    # Do whatever you need to the prompt based on the role
+```
+
+Here's how you **initialize the agent** with the function as middleware and how to invoke it with context.
+
+```
+agent = create_agent(
+    model = "gpt-4.1-mini",
+    middleware = [user_role_prompt],
+    context_schema = Context
+)
+
+response = agent.invoke(
+        {
+        "messages" : [
+            {
+                "role": "user",
+                "content": "YOUR PROMPT MESSAGE"
+            }
+        ]
+    },
+    context = Context(user_role = "YOUR USER ROLE CASE")
+)
+```
+
+Here's an example on how to **dynamically select a model**.
+
+Start by initializing multiple models.
+
+```
+basic_model = init_chat_model(
+    model = 'gpt-4.0-mini',
+    temperature = 0.1
+)
+advanced_model = init_chat_model(
+    model = 'gpt-4.1-mini',
+    temperature = 0.1
+)
+```
+
+**Create the middleware** that handles model selection. This function happens when the agent is called.
+
+```
+@wrap_model_call
+def dynamic_model_selection(request : ModelRequest, handler) -> ModelResponse:
+    message_count = len(request.state["messages"])
+
+    if message_count > 3:
+        model = advanced_model
+    else:
+        model = basic_model
+
+    request.model = model
+
+    return handler(request)
+```
+
+**Create an agent** with that middleware. You can assign it any starting model, it will be changed dynamically when the agent is called.
+
+```
+agent = create_agent(
+    model = basic_model,
+    middleware = [dynamic_model_selection]
+)
+```
+
+Now an example of **custom middleware**.
+Customize what happens in each part:
+
+- Before Agent
+- Before Model
+- After Model
+- After Agent
+
+Note that the middleware is passed as an **instance** and not the class.
+
+```
+class HooksDemo(AgentMiddleware):
+    def __init__(self):
+        super().__init__()
+        self.start_time = 0.0
+
+    def before_agent(self, state: AgentState, runtime):
+        self.start_time = time.time()
+        print("Before agent triggered")
+
+    def before_model(self, state: AgentState, runtime):
+        print("Before model")
+
+    def after_model(self, state: AgentState, runtime):
+        print("After model")
+
+    def after_agent(self, state: AgentState, runtime):
+        print(f"After agent triggered {time.time() - self.start_time}")
+
+agent = create_agent(
+    model = 'gpt-4.1-mini',
+    middleware = [HooksDemo()]
+)
+```
+
+Now example of **existing middleware**, read the docs for available ones.
+
+Example for **summarization**: summarize the conversation after 4000 tokens and keep the last 20 messages using an LLM.
+
+```
+agent = create_agent(
+    model = 'gpt-4.1-mini',
+    middleware = [
+        SummarizationMiddleware(
+            model = 'gpt-4.1-mini',
+            max_tokens_before_summary = 4000,
+            messages_to_keep = 20,
+            summary_prompt = "Summarize the most important key points of this conversation."
+        )
+    ]
+)
 ```

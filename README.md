@@ -99,7 +99,7 @@ How to interact with an LLM (like chat-GPT) but through code:
 load_dotenv()
 ```
 
-2. Create the **model reference** using its identifier
+2. Create the **model reference** using its identifier, temperature = 0 for deterministic behavior.
 
 ```
 model = init_chat_model(
@@ -541,3 +541,14 @@ agent = create_agent(
     ]
 )
 ```
+
+## 2 - Agentic AI Course with LangChain
+
+Following this [video tutorial](https://www.youtube.com/watch?v=D74el9mvNak) which is a 2h crash course on Agentic AI with LangChain.
+
+**Context Window**: number of tokens the agent can receive.
+**Temperature**: Randomness/Stochasticity (0 = deterministic behavior).
+**Top K**: Sample from the top k classes (tokens) with highest probabilities.
+**Top P**: Sample from the top P probabilities (summed probabilities up to P) of classes.
+**LLM**: Trained on large corpus of data to learn the statistical probabilities.
+**RLHF (Reinforcement Learning with Human Feedback)**: Method to train an LLM with RL where the feedback is given by the human. The LLM produces more than one answer and the human selects the better one. To avoid "toxicity", requires a lot of humans!

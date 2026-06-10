@@ -19,7 +19,7 @@ uv add "langchain[mistralai]" # Same for MistralAI
 uv add "langchain[google-genai]" # Same for Google
 ```
 
-Create a file with API key you are going to use.
+Create a file named **.env** with API key you are going to use.
 
 ```
 OPENAI_API_KEY=
@@ -547,8 +547,54 @@ agent = create_agent(
 Following this [video tutorial](https://www.youtube.com/watch?v=D74el9mvNak) which is a 2h crash course on Agentic AI with LangChain.
 
 **Context Window**: number of tokens the agent can receive.
+
 **Temperature**: Randomness/Stochasticity (0 = deterministic behavior).
+
 **Top K**: Sample from the top k classes (tokens) with highest probabilities.
+
 **Top P**: Sample from the top P probabilities (summed probabilities up to P) of classes.
+
 **LLM**: Trained on large corpus of data to learn the statistical probabilities.
+
 **RLHF (Reinforcement Learning with Human Feedback)**: Method to train an LLM with RL where the feedback is given by the human. The LLM produces more than one answer and the human selects the better one. To avoid "toxicity", requires a lot of humans!
+
+### 2.1 - API Keys
+
+The course asks us to create both [Google](https://aistudio.google.com/) and [Grok](https://www.console.groq.com) API Keys. Create a **.env** file with them inside.
+
+```
+GOOGLE_API_KEY=
+GROQ_API_KEY=
+```
+
+Place the **.toml** file inside the directory and run the environment installation commands.
+
+```
+uv init
+uv sync
+```
+
+### 2.2 - Simple LLM Calls
+
+Google Gemini example.
+
+```
+llm = ChatGoogleGenerativeAI(model = "gemma-4-31b-it", temperature = 0)
+response = llm.invoke("How many moons does Jupiter have?")
+print(response.text)
+```
+
+System message example.
+
+```
+response = llm.invoke([
+    ["system", "You are a helpful assistant that answers in one line."],
+    ["human", "How many moons does Jupiter have?"]
+])
+```
+
+Groq QWEN3 call example.
+
+```
+llm = ChatGroq(model = "qwen/qwen3-32b", temperature = 0)
+```

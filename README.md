@@ -558,7 +558,7 @@ Following this [video tutorial](https://www.youtube.com/watch?v=D74el9mvNak) whi
 
 **RLHF (Reinforcement Learning with Human Feedback)**: Method to train an LLM with RL where the feedback is given by the human. The LLM produces more than one answer and the human selects the better one. To avoid "toxicity", requires a lot of humans!
 
-### 2.1 - API Keys
+### 2.1 - API Keys and Environment Setup
 
 The course asks us to create both [Google](https://aistudio.google.com/) and [Grok](https://www.console.groq.com) API Keys. Create a **.env** file with them inside.
 
@@ -567,7 +567,39 @@ GOOGLE_API_KEY=
 GROQ_API_KEY=
 ```
 
-Place the **.toml** file inside the directory and run the environment installation commands.
+Create a **pyproject.toml** file inside the directory with the following contents.
+
+```
+[project]
+name = "agentic-ai-crash-course"
+version = "0.1.0"
+description = "Agentic AI crash course by Codebasics"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "langchain>=0.3.0",
+    "langchain-core>=1.0.0",
+    "langchain-google-genai>=4.2.2",
+    "langchain-groq>=0.3.0",
+    "python-dotenv>=1.2.2",
+    "streamlit>=1.57.0",
+    "ipykernel>=7.2.0",
+    "notebook>=7.5.6",
+    "langchain-chroma>=1.1.0",
+    "langchain-huggingface>=1.2.2",
+    "chromadb>=1.5.9",
+    "sentence-transformers>=5.5.0",
+    "pandas>=3.0.2",
+    "fpdf2>=2.8.7",
+    "pypdf>=6.11.0",
+    "langchain-community>=0.4.1",
+    "langchain-text-splitters>=1.1.2",
+    "pillow>=12.2.0",
+    "torchvision>=0.27.0",
+]
+```
+
+Run the environment installation commands.
 
 ```
 uv init

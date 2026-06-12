@@ -608,7 +608,7 @@ uv sync
 
 ### 2.2 - Simple LLM Calls
 
-Google Gemini example.
+**Google** Gemini example.
 
 ```
 llm = ChatGoogleGenerativeAI(model = "gemma-4-31b-it", temperature = 0)
@@ -616,7 +616,7 @@ response = llm.invoke("How many moons does Jupiter have?")
 print(response.text)
 ```
 
-System message example.
+**System message** example.
 
 ```
 response = llm.invoke([
@@ -625,8 +625,151 @@ response = llm.invoke([
 ])
 ```
 
-Groq QWEN3 call example.
+**Groq** QWEN3 call example.
 
 ```
 llm = ChatGroq(model = "qwen/qwen3-32b", temperature = 0)
+```
+
+### 2.3 List Gemini Models
+
+```
+from dotenv import load_dotenv
+import google.generativeai as genai
+
+load_dotenv()
+
+genai.configure(api_key = os.environment["GOOGLE_API_KEY"])
+for model in genai.list_models():
+    print(model.name)
+```
+
+### 2.4 Workflow Example
+
+Example of parsing some information from a source (text file for example), passing it to an LLM, then the result goes also back to an LLM to obtain the final result.
+
+Read the file for the information.
+
+```
+with open("blood_work.txt", "r") as f:
+    blood_report = f.read()
+```
+
+Create the LLM access object.
+
+```
+llm = ChatGoogleGenerativeAI(model = "gemini-2.5-flash")
+```
+
+Prompt the LLM using the text information and obtain the first response.
+
+```
+extraction_prompt = f"""
+You are a medical data extraction assistant.
+
+From the blood report below, extract ALL test values and classify each one as HIGH, LOW, or NORMAL
+based on the reference ranges provided in the report.
+
+Format your response as:
+- Test Name: value | Status: HIGH/LOW/NORMAL | Reference: range
+
+Blood Report:
+{blood_report}
+"""
+
+extraction_response = llm.invoke(extraction_prompt)
+extracted_values = extraction_response.text
+```
+
+Create a second prompt with the previous LLM response to obtain the final results.
+
+```
+diet_prompt = f"""
+You are a clinical nutritionist specializing in Indian dietary habits.
+
+Based on the blood work analysis below, write:
+1. A short health summary in 4-5 lines explaining the patient's condition in simple language
+2. A short, practical Indian diet plan having only two sections (1) Foods to avoid (2) Foods to eat more of.
+   Do not include any other sections in diet plan.
+
+Blood Work Analysis:
+{extracted_values}
+"""
+diet_response = llm.invoke(diet_prompt)
+```
+
+### 2.5 RAG - Retrieval Augmented Generation
+
+LLMs are trained on general knowledge. It does not have access to private information and may struggle with specific information. But if you provide it some source of information, it can infer the answer.
+
+However, the LLM is limited to its context window so you may not pass it all of your information. Additionally, this would be very costly over time.
+
+Instead you can pass it chunks of the information which are likely to contain the answer.
+How do you know what chunks to pass it? Embeddings. Convert the text into a vector such that it can represent their meaning in number form.
+
+To generate embeddings you can use a variety of models such as sentence-transformers or text-embedding-3-small. You can store these embeddings in a vector based database such as Mivus, Qdrant, ChromaDB. This step is called indexing, where you index these chunks into a vector database.
+
+The second step is retrieval, where for a given question you generate its embedding using the same embedding model and then you try to find the relevant chunks in the database.
+
+Then you obtain the text of those selected chunks, put them inside a prompt to query the LLM and obtain the final answer.
+
+Benefits of RAG:
+
+- Higher Accuracy answers.
+- Fewer Hallucinations.
+- Cost Effective (less tokens sent).
+
+#### 2.5.1 Vector Databases (ChromaDB)
+
+The popular opensource vector database is ChromaDB.
+
+```
+uv add chromadb
+```
+
+Import the library and create a Client which works like the Database.
+
+```
+import chromadb
+
+client = chromadb.Client()
+```
+
+Now create a collection which will contain information and works like a Table.
+
+```
+collection = client.create_collection("news")
+```
+
+Add the information to the collection as Documents, these work like rows.
+
+ChromaDB will create embeddings for each document and store them.
+
+By default ChromaDB uses the all-MiniLM-L6-v2 embedding model
+
+```
+collection.add(
+    ids = ["id1", "id2", "id3", "id4"],
+    documents=[
+        "Apple is leading in a smart phone game with iPhone sales up by 35%",
+        "Tesla booked a minor profit of 1 billion $ in Q2",
+        "Apples are high in fiber, vitamin C, and various antioxidants",
+        "SpaceX got NASA contract worth 10 billion $",
+    ]
+)
+```
+
+You obtain these embeddings from the collection and see how they look.
+
+```
+data = collection.get(include = ["documents", "embeddings", "metadatas"])
+for emb in data["embeddings"]:
+    print(emb)
+```
+
+Finally, you can query the database and obtain the closest matched documents it contains. It does semantic search. In other words it searches through the meaning of the document instead of keywords or words. In these examples, we don't have any document with words Elon or Musk. Yet, it will know to fetch the documents related to Tesla and SpaceX.
+
+```
+results = collection.query(query_texts = ["This is a query related to Elon Musk."], n_results = 2)
+print(results)
 ```

@@ -1,6 +1,6 @@
 # Agentic Learning
 
-My self-taught journey on Agentic Systems, LangChain and LangGraph.
+My self-taught journey on Agentic Systems, [LangChain](https://www.docs.langchain.com) and LangGraph.
 
 ## 1 - LangChain Overview
 
@@ -773,3 +773,165 @@ Finally, you can query the database and obtain the closest matched documents it 
 results = collection.query(query_texts = ["This is a query related to Elon Musk."], n_results = 2)
 print(results)
 ```
+
+#### 2.5.2 Pipeline Example
+
+Load information for example from a PDF.
+
+```
+loader = PyPDFLoader(PDF_PATH)
+pages = loader.load()
+```
+
+Split the information into chunks. Specify the size of each chunk (number of words). Number of overlapping words between consecutive chunks. Separators that define what constitutes a word.
+
+```
+splitter = RecursiveCharacterTextSplitter(
+    chunk_size = 600, # words per chunk
+    chunk_overlap = 100, # overlap 100 words between chunks
+    separators = ["\n\n", "\n", ".", " "] # tries paragraph -> sentence -> word
+)
+chunks = splitter.split_documents(pages)
+```
+
+Convert the chunks into embeddings, and convert the embeddings into a vector store (database).
+
+```
+embeddings = HuggingFaceEmbeddings(model_name = "sentence-transformers/all-MiniLM-L6-v2")
+vector_store = Chroma.from_documents(chunks, embeddings)
+```
+
+Create the retriever using the vector store (database)
+
+```
+retriever = vector_store.as_retriever(search_kwargs = {"k" : 3}) # Return the TOP 3 chunks
+```
+
+You can query the retriever, similar to querying the database before.
+
+```
+retrieved = retriever.invoke("What is VOLTE and how does it improve call quality?")
+```
+
+Let's create the LLM pipeline. First, create the LLM access object.
+
+```
+llm = ChatGroq(
+    model = "qwen/qwen3-32b",
+    temperature = 0,
+    reasoning_format = "parsed",
+)
+```
+
+Now lets define the first prompt.
+
+```
+SYSTEM_PROMPT = """\
+You are a helpful telecom assistant.
+Answer the question using ONLY the context provided below.
+If the context does not contain enough information, say so clearly.
+
+Context:
+{context}
+"""
+
+prompt = ChatPromptTemplate.from_messages([
+    ("system", SYSTEM_PROMPT),
+    ("human", "{question}"),
+])
+```
+
+Create the chain (pipeline). Here the function is a helpful parser.
+
+```
+def format_docs(docs):
+    return "\n\n---\n\n".join(doc.page_content for doc in docs)
+
+chain = (
+    {"context": retriever | format_docs, "question": RunnablePassthrough()}
+    | prompt
+    | llm
+    | StrOutputParser()
+)
+```
+
+Finally, invoke the chain.
+
+```
+question = "How does international roaming work and what charges should I expect?"
+answer = chain.invoke(question)
+```
+
+### 2.6 Agents
+
+Agents = LLM + Tools + Memory
+
+Here's an example of a few tools. **It is the document string in the function that allows the agent to figure out which tool to use!**
+
+```
+PRODUCTS = {
+    "wireless headphones": {"price": 79.99,  "rating": 4.6, "description": "Over-ear Bluetooth, 30-hr battery, active noise cancellation."},
+    "smart watch":         {"price": 199.99, "rating": 4.3, "description": "Tracks heart rate and sleep. 5-day battery, water-resistant."},
+    "mechanical keyboard": {"price": 129.00, "rating": 4.8, "description": "Tenkeyless, Cherry MX Brown switches, per-key RGB."},
+    "laptop stand":        {"price": 34.99,  "rating": 4.5, "description": "Adjustable aluminium, fits 11-17 inch laptops, folds flat."},
+}
+
+@tool
+def get_product(name: str) -> str:
+    """Look up a product by name and return its price, rating, stock, and description."""
+    p = PRODUCTS.get(name.lower())
+    if not p:
+        return f"Product not found. Available: {', '.join(PRODUCTS)}"
+    return str(p)
+
+REVIEWS = {
+    "wireless headphones": {"reviews": 1262, "rating": 4.6},
+    "smart watch":         {"reviews": 340,  "rating": 3.9},
+    "mechanical keyboard": {"reviews": 67,   "rating": 4.8},
+    "laptop stand":        {"reviews": 781,  "rating": 4.5},
+}
+
+@tool
+def get_review(name: str) -> str:
+    """Look up a product review by a product name. Return the product name, number of reviews and rating"""
+    r = REVIEWS.get(name.lower())
+    if not r:
+        return f"Review not available for this product"
+    return str(r)
+```
+
+Create the agent in the way that we already know. In this case we choose to have access to both the LLM and the agent.
+
+```
+llm = ChatGroq(model = "llama-3.3-70b-versatile", temperature = 0)
+
+agent = create_agent(
+    llm,
+    tools = [get_product],
+    system_prompt = "You are a helpful product assistant for an online tech store.",
+)
+```
+
+Let's place an agent call inside a function for easy use.
+
+```
+def ask(question: str):
+    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+    print(result["messages"][-1].content)
+```
+
+Now, we can easily use the agent just with a prompt string.
+
+```
+ask("what is the price of wireless headphones.")
+```
+
+The agent uses its LLM to look at the question and its tool's descriptions (doc strings), and figures out which tool to use. It knows to extract the product name and call the right tool.
+
+1 - Extract product name.
+
+2 - Call **get_product("wireless headphones")** tool.
+
+3 - Analyze the answer of the tool.
+
+4 - Return human readable answer.

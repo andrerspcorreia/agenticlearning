@@ -1066,3 +1066,35 @@ agent = create_agent(
     ]
 )
 ```
+
+## Cheat Sheet
+
+1 - **Install packages** - install langchain and then [specific llm suplier]
+
+2 - **Get keys and create file** - put API keys in .env file
+
+3 - **load_dotenv** - always call this at the beginning it will load api keys and you don't have to worry about them anymore
+
+4 - **Create an agent with an LLM** - use the create_agent function and specify llm name
+
+5 - **Create a tool and an agent with a tool** - create a function with annotator tool and the docstring tells the agent what it does, the tool is passed as a list to the agent in the create_agent function
+
+6 - **Create an llm** - init_chat_model creates an llm connection can be passed to create_agent instead of the string name
+
+7 - **Create messages and call the agent** - the dictionary way with "messages" pointing to a list, or a list system/human/aimessage objects (easier)
+
+8 - **Create more than 1 message** - with the second method described above
+
+9 - **Realtime output (stream)** - use this: for chunk in model.stream("PROMPT MESSAGE HERE"):
+
+10 - **Context** - create a dataclass, pass it to the create_agent, this should now be the input of a tool
+
+11 - **Response format** - create a dataclass, pass it to the create_agent, agent should now respond in this format
+
+12 - **Checkpointer** - create the object InMemorySaver(), pass it to the agent, call it with a config object with thread id key
+
+13 - **Multimodal input** - can pass images with url and bytes, don't memorize just copy paste from example how to do it
+
+14 - **RAG** - source of knowledge -> convert to vector/embedding -> create a retriever from this -> have model access this retriever (for example as a tool or inside a tool)
+
+15 - **Middleware** - pass them inside create_agent as a list similar to tools, existing middleware or custom, custom has many annotators that happen at different points of the pipeline

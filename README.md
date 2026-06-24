@@ -866,6 +866,8 @@ answer = chain.invoke(question)
 
 Agents = LLM + Tools + Memory
 
+#### 2.6.1 Tools
+
 Here's an example of a few tools. **It is the document string in the function that allows the agent to figure out which tool to use!**
 
 ```
@@ -935,3 +937,132 @@ The agent uses its LLM to look at the question and its tool's descriptions (doc 
 3 - Analyze the answer of the tool.
 
 4 - Return human readable answer.
+
+#### 2.6.2 Memory
+
+Here's how you give an "in" memory to your agent.
+
+"in" memory - session memory it does not persist to disk.
+
+```
+from langgraph.checkpoint.memory import InMemorySaver
+
+agent = create_agent(
+    llm,
+    tools = [get_product],
+    system_prompt = "You are a helpful product assistant for an online tech store.",
+    checkpointer = InMemorySaver()
+)
+```
+
+Here's how you call the agent with a memory. Just like the first course, we give the agent a thread ID.
+
+```
+def ask(question: str):
+    config = {
+        "configurable":
+        {
+            "thread_id":
+            "user-alice-session-1"
+        }
+    }
+    result = agent.invoke(
+        {
+            "messages": [
+                {
+                    "role": "user",
+                    "content": question
+                }
+            ],
+        }, config
+    )
+    print(result["messages"][-1].content)
+```
+
+Now we can ask the agent two questions, and the agent can answer the second one based on the first!
+
+```
+ask("what is the price of wireless headphones.")
+ask("what are the reviews on this product")
+```
+
+#### 2.6.3 Multi-Agent Systems
+
+When there is a task too great for a single agent you may employ multiple. For example coding agents: an agent to plan, another to write the code, another to review and another to test.
+
+#### 2.6.4 Multi-Modal Agents
+
+AI model that can process more than one type of data, for example text and images. You open the image bytes and convert them to string. Then you pass the image string and a text prompt to the model.
+
+```
+with open("blood_work.png", "rb") as f:
+    image_b64 = base64.b64encode(f.read()).decode()
+
+message = HumanMessage(
+    content =
+    [
+        {
+            "type": "image_url",
+            "image_url": {
+                "url": f"data:image/png;base64,{image_b64}"
+            }
+        },
+        {
+            "type": "text",
+            "text": "This is a blood work report. Extract all test results and flag any values outside the normal range."
+        }
+])
+```
+
+#### 2.6.5 Evaluation
+
+AI Agents are probabilistic - they can produce different output for the same input.
+
+- Functional Evaluation - Is the answer correct? Hallucinations?
+- Cost Evaluation - Number of tokens, latency.
+- Safety Evaluation - Toxic output, jailbreaks.
+
+Langsmith and Ragas are two frameworks you can use for Evaluation.
+
+Convert both the LLM answer and desired answer to embeddings. Then do cosine similarity between them.
+
+Create an account in [smith.langchain.com](https://www.smith.langchain.com).
+Then create an API key and place it in the .env file as "LANGSMITH_API_KEY".
+
+#### 2.6.6 Guard Rails
+
+Your agent may have to be restricted to not access or leak critical information. Or out of scope or jailbreaks. Here's how to add guard rails using Middelware.
+
+```
+agent = create_agent(
+    system_prompt="""You are a customer service assistant.
+    You have access to the get_customer_info_tool which provides customer information based on the customer's name.
+    When a user asks for information about a customer, use the get_customer_info_tool to retrieve the data.
+
+    IMPORTANT RULES:
+    1. Return all data fields EXACTLY as received from the tool — do NOT reformat,
+       abbreviate, paraphrase, or restructure any field values (especially numbers and emails).
+    2. Credit card numbers must always be returned in their original format with dashes
+       e.g., XXXX-XXXX-XXXX-XXXX — never remove dashes or spaces.
+    3. Do not handle PII directly. Middleware will automatically redact/mask sensitive
+       fields — your job is only to pass the raw values through unchanged.
+    4. Return information as plain text, not JSON.
+    """,
+    model = llm,
+    tools = [get_customer_info_tool],
+    middleware= [       # Mask credit cards in user input
+        PIIMiddleware(
+            "credit_card",
+            strategy = "mask",
+            apply_to_tool_results = True
+        ),
+        # Redact emails in user input before sending to model
+        PIIMiddleware(
+            "email",
+            strategy = "redact",
+            apply_to_tool_results = True,
+            apply_to_output = True
+        ),
+    ]
+)
+```

@@ -2,6 +2,7 @@ from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain.tools import tool
 from langchain.agents import create_agent
+from langgraph.checkpoint.memory import InMemorySaver
 
 load_dotenv()
 
@@ -21,16 +22,34 @@ def get_product(name: str) -> str:
     return str(p)
 
 # Create the LLM access object
-llm = ChatGroq(model="llama-3.3-70b-versatile", temperature=0)
+llm = ChatGroq(model = "llama-3.3-70b-versatile", temperature = 0)
 
 agent = create_agent(
     llm,
-    tools=[get_product],
-    system_prompt="You are a helpful product assistant for an online tech store.",
+    tools = [get_product],
+    system_prompt = "You are a helpful product assistant for an online tech store.",
+    checkpointer = InMemorySaver()
 )
 
 def ask(question: str):
-    result = agent.invoke({"messages": [{"role": "user", "content": question}]})
+    config = {
+        "configurable": 
+        {
+            "thread_id": 
+            "user-alice-session-1"
+        }
+    }
+    result = agent.invoke(
+        {
+            "messages": [
+                {
+                    "role": "user", 
+                    "content": question
+                }
+            ], 
+        }, config
+    )
     print(result["messages"][-1].content)
 
 ask("what is the price of wireless headphones.")
+ask("what are the reviews on this product")

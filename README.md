@@ -1067,7 +1067,7 @@ agent = create_agent(
 )
 ```
 
-## Cheat Sheet
+## 3 - LangChain Cheat Sheet
 
 1 - **Install packages** - install langchain and then [specific llm suplier]
 
@@ -1098,3 +1098,139 @@ agent = create_agent(
 14 - **RAG** - source of knowledge -> convert to vector/embedding -> create a retriever from this -> have model access this retriever (for example as a tool or inside a tool)
 
 15 - **Middleware** - pass them inside create_agent as a list similar to tools, existing middleware or custom, custom has many annotators that happen at different points of the pipeline
+
+## 4 - LangGraph Overview
+
+Following this [video tutorial](https://www.youtube.com/watch?v=uWLJAtMOVT0) which provides a general overview of LangGraph.
+
+Part of the LangChain which is part of the LangChain ecosystem but operates on a lower level.
+
+LangGraph is made for agent orchestration, building workflows, modeling whole processes as graphs.
+LangChain = high level, LangGraph = low level.
+
+### 4.0 Setup Environment
+
+Setup the environment and install the packages of the provider you are going to use.
+
+```
+uv init # Initialize a virtual environment
+uv add langchain # Install langchain package
+uv add langgraph # Install langgraph package
+uv add "langchain[openai]" # Install package with OpenAI dependencies
+uv add "langchain[anthropic]" # Same for Anthropic
+uv add "langchain[mistralai]" # Same for MistralAI
+uv add "langchain[google-genai]" # Same for Google
+```
+
+Create a file named **.env** with API key you are going to use.
+
+```
+OPENAI_API_KEY=
+MISTRAL_API_KEY=
+ANTROPIC_API_KEY=
+GOOGLE_API_KEY=# may not be the correct name
+```
+
+Install this package to load the variables from the **.env** file.
+
+```
+uv add python-dotenv
+```
+
+### 4.1 Basic Agent with a tool
+
+1. Load **.env** API Keys.
+
+```
+load_dotenv()
+```
+
+### 4.2 Basic Example
+
+In LangGraph we work with graphs. Starting at an initial node, and finishing at an end node. The most basic example is placing a prompt call node in between these two fundamental nodes.
+
+Initialize an LLM reference.
+
+```
+from langchain.chat_models import init_chat_model
+llm = init_chat_model("openai:gpt-4.1-mini")
+```
+
+Import the START and END node, the main graph and the MessagesState.
+
+```
+from langgraph.graph import MessagesState, StateGraph, START, END
+```
+
+Create a node.
+
+Even though it looks like the message list is being overwritten by the response, it is actually updated (appended).
+
+```
+def prompt_llm(state : MessagesState):
+    response = llm.invoke(state["messages"])
+    return {"message": [response]}
+```
+
+Create the graph builder. We get the graph when we compile the builder.
+
+You pass the state class type, so the graph knows what the state of the graph is.
+
+The state is passed from node to node.
+
+Then you can add the node you created to this graph.
+
+```
+graph_builder = StateGraph(MessagesState)
+graph_builder.add_node(prompt_llm)
+```
+
+Now you need to connect the nodes with edges. Note that it is a string this time, it is the name of the function.
+
+```
+graph_builder.add_edge(START, "prompt_llm")
+graph_builder.add_edge("prompt_llm", END)
+```
+
+Compile the graph builder and obtain the graph instance.
+
+```
+graph = graph_builder.compile()
+```
+
+Run the workflow graph.
+
+```
+user_message = input("Enter prompt:")
+graph.invoke({"messages" : [{"role" : "user", "content" : user_message}]})
+```
+
+### 4.3 Add Memory
+
+To add memory you create a checkpointer like before, but now you pass it in the compilation step.
+
+```
+from langgraph.checkpoint.memory import InMemorySaver
+
+checkpointer = InMemorySaver()
+graph = graph_builder.compile(checkpointer = checkpointer)
+```
+
+Then invoke like before with the config. Here we are using uuid for the thread ID as it is more "professional".
+
+```
+import uuid
+
+config = {
+    "configurable" : {
+        "thread_id" : uuid.uuid4()
+    }
+}
+
+user_message = input("Enter prompt:")
+graph.invoke({"messages" : [{"role" : "user", "content" : user_message}]}, config = config)
+```
+
+### 4.4 Classifier Node
+
+We want to know the intent of a user message. With this intent the graph will decide what to do with it.
